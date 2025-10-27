@@ -8,6 +8,7 @@ const AIServiceFactory = require('./services/aiServiceFactory');
 const documentModel = require('./models/document');
 const setupService = require('./services/setupService');
 const setupRoutes = require('./routes/setup');
+const MCPServer = require('./mcp-server');
 
 // Add environment variables for RAG service if not already set
 process.env.RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || 'http://localhost:8000';
@@ -438,11 +439,11 @@ const ragRoutes = require('./routes/rag');
 // Mount RAG routes if enabled
 if (process.env.RAG_SERVICE_ENABLED === 'true') {
   app.use('/api/rag', ragRoutes);
-  
+
   // RAG UI route
   app.get('/rag', async (req, res) => {
     try {
-      res.render('rag', { 
+      res.render('rag', {
         title: 'Dokumenten-Fragen'
       });
     } catch (error) {
@@ -450,6 +451,71 @@ if (process.env.RAG_SERVICE_ENABLED === 'true') {
       res.status(500).send('Error loading RAG interface');
     }
   });
+}
+
+// MCP Server Integration
+if (process.env.ENABLE_MCP_SERVER === 'true') {
+  console.log('Initializing MCP server...');
+
+  const mcpServer = new MCPServer();
+
+  // Authentication middleware for MCP endpoints
+  const authenticateMCP = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        error: 'Missing Authorization header',
+        message: 'Use: Authorization: Bearer <your-api-key>'
+      });
+    }
+
+    const token = authHeader.substring(7); // Remove 'Bearer '
+
+    if (token !== process.env.API_KEY) {
+      return res.status(401).json({
+        error: 'Invalid API key'
+      });
+    }
+
+    next();
+  };
+
+  // MCP discovery endpoint
+  app.get('/mcp', (req, res) => {
+    res.json({
+      name: "paperless-ai",
+      version: process.env.PAPERLESS_AI_VERSION || "1.0.0",
+      description: "Paperless-AI Document Search and Retrieval",
+      transport: {
+        type: "sse",
+        endpoint: "/mcp/sse"
+      },
+      authentication: {
+        type: "bearer",
+        description: "Use your Paperless-AI API key as Bearer token"
+      },
+      tools: [
+        "search_documents",
+        "get_document"
+      ]
+    });
+  });
+
+  // MCP SSE endpoint with authentication
+  app.get('/mcp/sse', authenticateMCP, async (req, res) => {
+    try {
+      const { SSEServerTransport } = require('@modelcontextprotocol/sdk/server/sse.js');
+      const transport = new SSEServerTransport('/mcp/sse', res);
+      await mcpServer.server.connect(transport);
+      console.log('MCP client connected via SSE');
+    } catch (error) {
+      console.error('MCP connection error:', error);
+      res.status(500).json({ error: 'MCP server error' });
+    }
+  });
+
+  console.log('MCP server endpoints registered');
 }
 
 /**

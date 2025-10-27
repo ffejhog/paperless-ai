@@ -4,7 +4,8 @@
   "description": "AI based Tag, correspondent and meta data generation",
   "main": "server.js",
   "scripts": {
-    "test": "nodemon server.js"
+    "test": "nodemon server.js",
+    "mcp-test": "node test-mcp-client.js"
   },
   "keywords": [
     "paperless-ngx",
@@ -29,6 +30,7 @@
   "author": "Clusterzx",
   "license": "MIT",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.2",
     "axios": "^1.8.2",
     "bcryptjs": "^3.0.2",
     "better-sqlite3": "^11.8.1",
